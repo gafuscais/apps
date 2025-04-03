@@ -4,7 +4,7 @@ from datetime import datetime
 import requests
 from io import StringIO
 
-# Configuración de página
+# Configuración de página y codificación UTF-8
 st.set_page_config(
     page_title="Dashboard Ecocentros Montevideo",
     page_icon="♻️",
@@ -45,9 +45,9 @@ def load_data():
             response = requests.get(DATA_URL, headers=headers, timeout=10)
             response.raise_for_status()  # Verificar si la descarga fue exitosa
             
-            # Convertir el contenido a un DataFrame
+            # Convertir el contenido a un DataFrame con codificación UTF-8
             content = StringIO(response.text)
-            df = pd.read_csv(content)
+            df = pd.read_csv(content, encoding='utf-8')
             st.success('Datos cargados correctamente desde la URL original.')
             return df
     
@@ -59,7 +59,19 @@ def load_data():
             uploaded_file = st.file_uploader("Sube el archivo CSV descargado manualmente:", type=['csv'])
             if uploaded_file is not None:
                 try:
-                    df = pd.read_csv(uploaded_file)
+                    # Intentar diferentes codificaciones
+                    try:
+                        df = pd.read_csv(uploaded_file, encoding='utf-8')
+                    except UnicodeDecodeError:
+                        try:
+                            # Reiniciar el puntero del archivo antes de intentar con otra codificación
+                            uploaded_file.seek(0)
+                            df = pd.read_csv(uploaded_file, encoding='latin1')
+                        except UnicodeDecodeError:
+                            # Reiniciar el puntero del archivo antes de intentar con otra codificación
+                            uploaded_file.seek(0)
+                            df = pd.read_csv(uploaded_file, encoding='ISO-8859-1')
+                    
                     st.success('Archivo cargado correctamente.')
                     return df
                 except Exception as upload_error:
@@ -94,12 +106,27 @@ MESES = {
     12: 'Diciembre'
 }
 
-# Resto de funciones (sin cambios)
+# Función para crear fecha completa
 def create_date_column(df):
     if df is not None:
-        df['fecha'] = pd.to_datetime([f"{year}-{month}-01" for year, month in zip(df.anio, df.mes)])
-        df['mes_nombre'] = df['mes'].map(MESES)
-        df['periodo'] = df['mes_nombre'] + ' ' + df['anio'].astype(str)
+        # Asegurarse de que 'anio' y 'mes' existen y son numéricos
+        if 'anio' in df.columns and 'mes' in df.columns:
+            # Convertir a numérico si no lo son
+            df['anio'] = pd.to_numeric(df['anio'], errors='coerce')
+            df['mes'] = pd.to_numeric(df['mes'], errors='coerce')
+            
+            # Crear columna de fecha
+            df['fecha'] = pd.to_datetime(
+                [f"{int(year)}-{int(month)}-01" for year, month in zip(df.anio, df.mes)], 
+                errors='coerce'
+            )
+            
+            # Crear columna de nombre de mes
+            df['mes_nombre'] = df['mes'].map(MESES)
+            
+            # Crear columna de período
+            df['periodo'] = df['mes_nombre'] + ' ' + df['anio'].astype(str)
+    
     return df
 
 def filter_dataframe(df, ecocentro, residuo, anio):
@@ -159,6 +186,10 @@ def main():
     df = load_data()
     
     if df is not None:
+        # Mostrar información básica sobre las columnas disponibles
+        st.sidebar.markdown("#### Columnas disponibles")
+        st.sidebar.write(", ".join(df.columns.tolist()))
+        
         # Preprocesar datos
         df = create_date_column(df)
         
@@ -247,7 +278,29 @@ def main():
         # Datos detallados
         st.markdown("### Datos Detallados")
         if not filtered_df.empty:
-            display_df = filtered_df[['ecocentro', 'anio', 'mes_nombre', 'residuo', 'kg']].sort_values(['anio', 'mes'], ascending=[False, False])
+            # Verificar columnas disponibles antes de intentar acceder a ellas
+            display_columns = ['ecocentro', 'anio', 'residuo', 'kg']
+            
+            # Añadir 'mes_nombre' solo si existe
+            if 'mes_nombre' in filtered_df.columns:
+                display_columns.insert(2, 'mes_nombre')
+            
+            # Crear DataFrame para mostrar
+            display_df = filtered_df[display_columns]
+            
+            # Ordenar solo por columnas que existen
+            sort_columns = []
+            if 'anio' in filtered_df.columns:
+                sort_columns.append('anio')
+            if 'mes' in filtered_df.columns:
+                sort_columns.append('mes')
+                
+            if sort_columns:
+                display_df = display_df.sort_values(
+                    sort_columns, 
+                    ascending=[False] * len(sort_columns)
+                )
+            
             st.dataframe(display_df, use_container_width=True)
             st.write(f"Mostrando {len(display_df)} de {len(filtered_df)} registros")
         else:
@@ -255,6 +308,13 @@ def main():
         
         # Información sobre los datos
         with st.expander("Acerca de los datos"):
+            min_date = "No disponible"
+            max_date = "No disponible"
+            
+            if 'fecha' in df.columns and not df['fecha'].isna().all():
+                min_date = df['fecha'].min().strftime('%Y-%m') if not pd.isna(df['fecha'].min()) else "No disponible"
+                max_date = df['fecha'].max().strftime('%Y-%m') if not pd.isna(df['fecha'].max()) else "No disponible"
+            
             st.write(f"""
             ### Información del dataset
             
@@ -263,7 +323,7 @@ def main():
             **Características del dataset:**
             - **Ecocentros disponibles**: {", ".join(df['ecocentro'].unique())}
             - **Tipos de residuos**: {len(df['residuo'].unique())}
-            - **Rango de fechas**: {df['fecha'].min().strftime('%Y-%m')} a {df['fecha'].max().strftime('%Y-%m')}
+            - **Rango de fechas**: {min_date} a {max_date}
             - **Total de registros**: {len(df)}
             
             **Fuente original:**
