@@ -11,28 +11,72 @@ st.set_page_config(
     layout="wide"
 )
 
-# URL de los datos
+# URLs para los datos
 DATA_URL = "https://ckan-data.montevideo.gub.uy/dataset/0a4cdc0a-ec35-4517-9e90-081659188ac0/resource/9eb3e81c-b916-4c6d-9f40-31dabebc708d/download/tabla_de_datos_de_material_ingresado_a_ecocentros.csv"
+DATASET_PAGE_URL = "https://ckan-data.montevideo.gub.uy/dataset/ecocentros"
 
-# Función para cargar los datos desde la URL
+# Función para cargar datos de prueba cuando la URL está bloqueada
+def load_sample_data():
+    # Creamos algunos datos de ejemplo que imitan la estructura del dataset original
+    data = {
+        'ecocentro': ['Buceo', 'Buceo', 'Prado', 'Prado', 'Móviles', 'Móviles', 'Buceo', 'Prado', 'Buceo', 'Prado'],
+        'mes': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        'anio': [2023, 2023, 2023, 2024, 2024, 2024, 2025, 2025, 2025, 2025],
+        'residuo': ['Electrónicos grandes', 'Muebles y colchones', 'Escombros', 'Restos de jardinería y poda', 
+                    'Papel', 'Plásticos PET', 'Metales', 'Envases de vidrio', 'Ropa y calzado', 'Otros objetos'],
+        'kg': [5600, 4800, 8900, 12500, 3200, 2800, 4300, 6700, 1900, 2300]
+    }
+    return pd.DataFrame(data)
+
+# Función para cargar los datos con manejo de bloqueos
 @st.cache_data(ttl=3600)  # Cache por 1 hora
-def load_data_from_url(url):
+def load_data():
+    # Primero intentamos cargar desde la URL original
     try:
-        # Mostrar mensaje mientras se cargan los datos
-        with st.spinner('Descargando datos desde la URL...'):
-            # Descargar datos desde la URL
-            response = requests.get(url)
+        with st.spinner('Intentando descargar datos desde la URL original...'):
+            # Configurar headers para simular un navegador
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3',
+                'Referer': DATASET_PAGE_URL
+            }
+            
+            response = requests.get(DATA_URL, headers=headers, timeout=10)
             response.raise_for_status()  # Verificar si la descarga fue exitosa
             
             # Convertir el contenido a un DataFrame
             content = StringIO(response.text)
             df = pd.read_csv(content)
-            
-            st.success('Datos cargados correctamente')
+            st.success('Datos cargados correctamente desde la URL original.')
             return df
+    
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 403:
+            st.warning(f"Acceso bloqueado (Error 403) a la URL original. Verifica si puedes descargar manualmente el archivo desde: [Catálogo de Datos Abiertos]({DATASET_PAGE_URL})")
+            
+            # Opción para cargar archivo local
+            uploaded_file = st.file_uploader("Sube el archivo CSV descargado manualmente:", type=['csv'])
+            if uploaded_file is not None:
+                try:
+                    df = pd.read_csv(uploaded_file)
+                    st.success('Archivo cargado correctamente.')
+                    return df
+                except Exception as upload_error:
+                    st.error(f"Error al procesar el archivo subido: {upload_error}")
+                    
+            # Opción para usar datos de prueba
+            if st.button("Usar datos de ejemplo para demostración"):
+                st.info("Usando datos de ejemplo para demostración. Estos NO son los datos reales.")
+                return load_sample_data()
+                
+        else:
+            st.error(f"Error HTTP al acceder a los datos: {e}")
+    
     except Exception as e:
-        st.error(f"Error al cargar los datos: {e}")
-        return None
+        st.error(f"Error general al cargar los datos: {e}")
+    
+    return None
 
 # Mapeo de meses
 MESES = {
@@ -50,16 +94,18 @@ MESES = {
     12: 'Diciembre'
 }
 
-# Función para crear fecha completa
+# Resto de funciones (sin cambios)
 def create_date_column(df):
-    # Crear columna de fecha para ordenar cronológicamente
-    df['fecha'] = pd.to_datetime([f"{year}-{month}-01" for year, month in zip(df.anio, df.mes)])
-    df['mes_nombre'] = df['mes'].map(MESES)
-    df['periodo'] = df['mes_nombre'] + ' ' + df['anio'].astype(str)
+    if df is not None:
+        df['fecha'] = pd.to_datetime([f"{year}-{month}-01" for year, month in zip(df.anio, df.mes)])
+        df['mes_nombre'] = df['mes'].map(MESES)
+        df['periodo'] = df['mes_nombre'] + ' ' + df['anio'].astype(str)
     return df
 
-# Función para aplicar filtros
 def filter_dataframe(df, ecocentro, residuo, anio):
+    if df is None:
+        return pd.DataFrame()
+        
     filtered_df = df.copy()
     
     if ecocentro != "Todos":
@@ -73,8 +119,10 @@ def filter_dataframe(df, ecocentro, residuo, anio):
     
     return filtered_df
 
-# Función para crear KPIs
 def create_kpis(df):
+    if df is None or df.empty:
+        return 0, 0, "N/A", "N/A"
+        
     # Total recolectado
     total_recolectado = df['kg'].sum()
     
@@ -105,10 +153,10 @@ def main():
     st.markdown("Visualización de datos de residuos recolectados en los ecocentros de Montevideo")
     
     # Información sobre la fuente de datos
-    st.markdown(f"**Fuente de datos:** [Catálogo de Datos Abiertos de Montevideo]({DATA_URL})")
+    st.markdown(f"**Fuente de datos:** [Catálogo de Datos Abiertos de Montevideo]({DATASET_PAGE_URL})")
     
-    # Cargar datos desde la URL
-    df = load_data_from_url(DATA_URL)
+    # Cargar datos
+    df = load_data()
     
     if df is not None:
         # Preprocesar datos
@@ -219,30 +267,27 @@ def main():
             - **Total de registros**: {len(df)}
             
             **Fuente original:**
-            Los datos se obtienen directamente del [Catálogo de Datos Abiertos de Montevideo]({DATA_URL}).
+            Los datos se obtienen del [Catálogo de Datos Abiertos de Montevideo]({DATASET_PAGE_URL}).
             """)
     else:
-        st.error("No se pudieron cargar los datos. Por favor, verifica la conexión a Internet o si la URL del dataset sigue siendo válida.")
+        st.error("No se pudieron cargar los datos y no se seleccionó usar los datos de ejemplo.")
         
-        # Mostrar URL fallida
-        st.code(DATA_URL)
-        
-        # Información de instalación
+        # Información de solución de problemas
         st.markdown("### Solución de problemas")
-        st.markdown("""
-        Si estás experimentando problemas al cargar los datos desde la URL, asegúrate de:
+        st.markdown(f"""
+        El acceso directo a los datos mediante programación está bloqueado por el servidor (Error 403 Forbidden).
         
-        1. Tener conexión a Internet estable.
-        2. Que la URL del dataset sea accesible (es posible que haya cambiado).
-        3. Tener instaladas todas las dependencias necesarias:
-        ```
-        pip install streamlit pandas requests
-        ```
+        ### Opciones para obtener los datos:
         
-        Para ejecutar la aplicación correctamente:
-        ```
-        streamlit run nombre_del_script.py
-        ```
+        1. **Descarga manual**: Visita la [página del dataset]({DATASET_PAGE_URL}) y descarga el archivo CSV manualmente.
+           - Luego sube el archivo usando el cargador proporcionado arriba.
+        
+        2. **Usa datos de ejemplo**: Puedes probar la funcionalidad del dashboard con datos de ejemplo haciendo clic en el botón "Usar datos de ejemplo para demostración".
+        
+        3. **Solución técnica**: Si eres administrador, puedes modificar este código para:
+           - Alojar una copia del CSV en tu propio servidor
+           - Crear una API proxy que obtenga los datos y evite las restricciones CORS
+           - Configurar un proceso de ETL que extraiga los datos periódicamente
         """)
 
 if __name__ == "__main__":
