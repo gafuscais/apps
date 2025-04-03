@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime
 import numpy as np
+from datetime import datetime
 
 # Configuración de página
 st.set_page_config(
@@ -15,10 +13,6 @@ st.set_page_config(
 # Función para cargar los datos
 @st.cache_data
 def load_data():
-    # En una aplicación real se usaría:
-    # df = pd.read_csv('tabla_de_datos_de_material_ingresado_a_ecocentros.csv')
-    
-    # Para este ejemplo, asumimos que el archivo está cargado como en el análisis previo
     try:
         df = pd.read_csv('tabla_de_datos_de_material_ingresado_a_ecocentros.csv')
         return df
@@ -44,6 +38,7 @@ MESES = {
 
 # Función para crear fecha completa
 def create_date_column(df):
+    # Crear columna de fecha para ordenar cronológicamente
     df['fecha'] = pd.to_datetime([f"{year}-{month}-01" for year, month in zip(df.anio, df.mes)])
     df['mes_nombre'] = df['mes'].map(MESES)
     df['periodo'] = df['mes_nombre'] + ' ' + df['anio'].astype(str)
@@ -64,103 +59,6 @@ def filter_dataframe(df, ecocentro, residuo, anio):
     
     return filtered_df
 
-# Función para crear serie temporal
-def create_time_series(df):
-    # Agrupar por fecha y sumar kilogramos
-    time_df = df.groupby(['fecha', 'periodo'])['kg'].sum().reset_index()
-    time_df = time_df.sort_values('fecha')
-    
-    # Crear gráfico
-    fig = px.line(
-        time_df, 
-        x='fecha', 
-        y='kg',
-        labels={'kg': 'Cantidad (kg)', 'fecha': 'Fecha'},
-        title='Evolución Mensual de Residuos'
-    )
-    
-    fig.update_layout(
-        xaxis_title='Fecha',
-        yaxis_title='Kilogramos',
-        height=400,
-        hovermode='x',
-        xaxis=dict(tickangle=-45)
-    )
-    
-    # Ajustar el formato de las etiquetas del eje X
-    fig.update_xaxes(
-        tickformat="%b %Y"
-    )
-    
-    return fig
-
-# Función para crear distribución de residuos
-def create_residuo_distribution(df):
-    residuo_df = df.groupby('residuo')['kg'].sum().reset_index()
-    residuo_df = residuo_df.sort_values('kg', ascending=False).head(10)
-    
-    fig = px.bar(
-        residuo_df,
-        y='residuo',
-        x='kg',
-        orientation='h',
-        labels={'kg': 'Cantidad (kg)', 'residuo': 'Tipo de Residuo'},
-        title='Top 10 Tipos de Residuos'
-    )
-    
-    fig.update_layout(
-        height=400,
-        yaxis=dict(autorange="reversed")
-    )
-    
-    return fig
-
-# Función para crear comparación de ecocentros
-def create_ecocentros_comparison(df):
-    ecocentro_df = df.groupby('ecocentro')['kg'].sum().reset_index()
-    
-    fig = px.bar(
-        ecocentro_df,
-        x='ecocentro',
-        y='kg',
-        color='ecocentro',
-        labels={'kg': 'Cantidad (kg)', 'ecocentro': 'Ecocentro'},
-        title='Comparación entre Ecocentros'
-    )
-    
-    fig.update_layout(
-        height=400,
-        xaxis_title='Ecocentro',
-        yaxis_title='Kilogramos'
-    )
-    
-    return fig
-
-# Función para crear comparación anual
-def create_anual_comparison(df):
-    anual_df = df.groupby('anio')['kg'].sum().reset_index()
-    
-    fig = px.bar(
-        anual_df,
-        x='anio',
-        y='kg',
-        labels={'kg': 'Cantidad (kg)', 'anio': 'Año'},
-        title='Comparación Anual'
-    )
-    
-    fig.update_layout(
-        height=400,
-        xaxis_title='Año',
-        yaxis_title='Kilogramos'
-    )
-    
-    # Asegurarse de que las etiquetas del eje X sean años enteros
-    fig.update_xaxes(
-        tickvals=anual_df['anio'].unique(),
-    )
-    
-    return fig
-
 # Función para crear KPIs
 def create_kpis(df):
     # Total recolectado
@@ -168,15 +66,21 @@ def create_kpis(df):
     
     # Promedio mensual
     monthly_data = df.groupby(['anio', 'mes'])['kg'].sum().reset_index()
-    promedio_mensual = monthly_data['kg'].mean()
+    promedio_mensual = monthly_data['kg'].mean() if not monthly_data.empty else 0
     
     # Residuo más recolectado
-    residuo_counts = df.groupby('residuo')['kg'].sum()
-    residuo_mas_recolectado = residuo_counts.idxmax()
+    if not df.empty:
+        residuo_counts = df.groupby('residuo')['kg'].sum()
+        residuo_mas_recolectado = residuo_counts.idxmax() if not residuo_counts.empty else "N/A"
+    else:
+        residuo_mas_recolectado = "N/A"
     
     # Ecocentro más activo
-    ecocentro_counts = df.groupby('ecocentro')['kg'].sum()
-    ecocentro_mas_activo = ecocentro_counts.idxmax()
+    if not df.empty:
+        ecocentro_counts = df.groupby('ecocentro')['kg'].sum()
+        ecocentro_mas_activo = ecocentro_counts.idxmax() if not ecocentro_counts.empty else "N/A"
+    else:
+        ecocentro_mas_activo = "N/A"
     
     return total_recolectado, promedio_mensual, residuo_mas_recolectado, ecocentro_mas_activo
 
@@ -213,6 +117,7 @@ def main():
         total, promedio, residuo_max, ecocentro_max = create_kpis(filtered_df)
         
         # Layout para KPIs en una fila
+        st.markdown("### Indicadores Clave")
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
@@ -227,36 +132,61 @@ def main():
         with col4:
             st.metric("Ecocentro Más Activo", ecocentro_max)
         
-        # Gráficos en la primera fila
+        # Primera fila de gráficos
+        st.markdown("### Evolución Temporal y Tipos de Residuos")
         col1, col2 = st.columns(2)
         
         with col1:
-            time_series_fig = create_time_series(filtered_df)
-            st.plotly_chart(time_series_fig, use_container_width=True)
+            st.subheader("Evolución Mensual de Residuos")
+            # Crear datos para gráfico de evolución temporal
+            time_df = filtered_df.groupby(['fecha', 'periodo'])['kg'].sum().reset_index()
+            time_df = time_df.sort_values('fecha')
+            
+            if not time_df.empty:
+                st.line_chart(time_df.set_index('fecha')['kg'])
+            else:
+                st.info("No hay datos disponibles para el gráfico de evolución temporal.")
         
         with col2:
-            residuo_fig = create_residuo_distribution(filtered_df)
-            st.plotly_chart(residuo_fig, use_container_width=True)
+            st.subheader("Top 10 Tipos de Residuos")
+            # Crear datos para gráfico de distribución de residuos
+            if not filtered_df.empty:
+                residuo_df = filtered_df.groupby('residuo')['kg'].sum().reset_index()
+                residuo_df = residuo_df.sort_values('kg', ascending=False).head(10)
+                st.bar_chart(residuo_df.set_index('residuo'))
+            else:
+                st.info("No hay datos disponibles para el gráfico de tipos de residuos.")
         
-        # Gráficos en la segunda fila
+        # Segunda fila de gráficos
+        st.markdown("### Comparaciones por Ecocentro y Año")
         col1, col2 = st.columns(2)
         
         with col1:
-            ecocentro_fig = create_ecocentros_comparison(filtered_df)
-            st.plotly_chart(ecocentro_fig, use_container_width=True)
+            st.subheader("Comparación entre Ecocentros")
+            # Crear datos para gráfico de comparación de ecocentros
+            if not filtered_df.empty:
+                ecocentro_df = filtered_df.groupby('ecocentro')['kg'].sum().reset_index()
+                st.bar_chart(ecocentro_df.set_index('ecocentro'))
+            else:
+                st.info("No hay datos disponibles para el gráfico de comparación de ecocentros.")
         
         with col2:
-            anual_fig = create_anual_comparison(filtered_df)
-            st.plotly_chart(anual_fig, use_container_width=True)
+            st.subheader("Comparación Anual")
+            # Crear datos para gráfico de comparación anual
+            if not filtered_df.empty:
+                anual_df = filtered_df.groupby('anio')['kg'].sum().reset_index()
+                st.bar_chart(anual_df.set_index('anio'))
+            else:
+                st.info("No hay datos disponibles para el gráfico de comparación anual.")
         
         # Datos detallados
-        st.subheader("Datos Detallados")
-        st.dataframe(
-            filtered_df[['ecocentro', 'anio', 'mes_nombre', 'residuo', 'kg']]
-            .sort_values(['anio', 'mes'], ascending=[False, False])
-            .head(1000),
-            use_container_width=True
-        )
+        st.markdown("### Datos Detallados")
+        if not filtered_df.empty:
+            display_df = filtered_df[['ecocentro', 'anio', 'mes_nombre', 'residuo', 'kg']].sort_values(['anio', 'mes'], ascending=[False, False])
+            st.dataframe(display_df, use_container_width=True)
+            st.write(f"Mostrando {len(display_df)} de {len(filtered_df)} registros")
+        else:
+            st.info("No hay datos disponibles que coincidan con los filtros seleccionados.")
         
         # Información sobre los datos
         with st.expander("Acerca de los datos"):
@@ -270,12 +200,29 @@ def main():
             """.format(
                 ", ".join(df['ecocentro'].unique()),
                 len(df['residuo'].unique()),
-                df['fecha'].min().strftime('%B %Y'),
-                df['fecha'].max().strftime('%B %Y'),
+                df['fecha'].min().strftime('%Y-%m'),
+                df['fecha'].max().strftime('%Y-%m'),
                 len(df)
             ))
     else:
         st.error("No se pudieron cargar los datos. Por favor, verifica que el archivo CSV esté disponible.")
+        
+        # Información de instalación
+        st.markdown("### Solución de problemas")
+        st.markdown("""
+        Si estás experimentando problemas al cargar los datos, asegúrate de:
+        
+        1. Tener el archivo `tabla_de_datos_de_material_ingresado_a_ecocentros.csv` en el mismo directorio que este script.
+        2. Tener instaladas todas las dependencias necesarias:
+        ```
+        pip install streamlit pandas
+        ```
+        
+        Para ejecutar la aplicación correctamente:
+        ```
+        streamlit run nombre_del_script.py
+        ```
+        """)
 
 if __name__ == "__main__":
     main()
