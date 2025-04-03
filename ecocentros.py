@@ -41,52 +41,39 @@ MESES = {
     12: 'Diciembre'
 }
 
-# Función para cargar los datos
+# Función para cargar datos desde URL (sin widgets)
 @st.cache_data(ttl=3600)  # Cache por 1 hora
-def load_data():
+def load_data_from_url():
     try:
-        # Opción 1: Cargar desde URL remota
-        with st.spinner('Intentando cargar datos desde la URL...'):
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            response = requests.get(DATA_URL, headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                # Decodificar con UTF-8
-                content = StringIO(response.content.decode('utf-8'))
-                df = pd.read_csv(content)
-                st.success('Datos cargados correctamente desde la URL')
-                return df
-            else:
-                st.warning(f"No se pudo acceder a la URL (Código {response.status_code})")
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(DATA_URL, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            # Decodificar con UTF-8
+            content = StringIO(response.content.decode('utf-8'))
+            df = pd.read_csv(content)
+            return df, None
+        else:
+            return None, f"No se pudo acceder a la URL (Código {response.status_code})"
                 
     except Exception as e:
-        st.warning(f"Error al cargar datos desde URL: {e}")
+        return None, f"Error al cargar datos desde URL: {e}"
 
-    # Opción 2: Cargar archivo local
-    uploaded_file = st.file_uploader("Sube el archivo CSV descargado manualmente:", type=['csv'])
-    if uploaded_file is not None:
+# Función para cargar datos desde archivo subido (sin cache)
+def load_data_from_file(uploaded_file):
+    try:
+        df = pd.read_csv(uploaded_file, encoding='utf-8')
+        return df, None
+    except UnicodeDecodeError:
         try:
-            df = pd.read_csv(uploaded_file, encoding='utf-8')
-            st.success('Archivo cargado correctamente')
-            return df
-        except UnicodeDecodeError:
-            try:
-                # Reiniciar el puntero del archivo
-                uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, encoding='latin1')
-                st.success('Archivo cargado correctamente (codificación latin1)')
-                return df
-            except Exception as e:
-                st.error(f"Error al leer el archivo: {e}")
-                
-    # Opción 3: Usar datos de ejemplo
-    if st.button("Usar datos de ejemplo para demostración"):
-        st.info("Usando datos de ejemplo para demostración")
-        return load_sample_data()
-                
-    return None
+            # Reiniciar el puntero del archivo
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file, encoding='latin1')
+            return df, None
+        except Exception as e:
+            return None, f"Error al leer el archivo: {e}"
 
 # Función para crear fecha completa
 def create_date_column(df):
@@ -149,8 +136,37 @@ def main():
     # Información sobre la fuente de datos
     st.markdown(f"**Fuente de datos:** [Catálogo de Datos Abiertos de Montevideo]({DATA_URL})")
     
-    # Cargar datos
-    df = load_data()
+    # Opciones para cargar datos (widgets fuera de la función cacheada)
+    st.sidebar.title("Cargar Datos")
+    data_source = st.sidebar.radio(
+        "Selecciona la fuente de datos:",
+        ["Cargar desde URL", "Subir archivo CSV", "Usar datos de ejemplo"]
+    )
+    
+    df = None
+    error_message = None
+    
+    # Cargar datos según la opción seleccionada
+    if data_source == "Cargar desde URL":
+        with st.sidebar.spinner('Cargando datos desde URL...'):
+            df, error_message = load_data_from_url()
+        if df is not None:
+            st.sidebar.success("Datos cargados correctamente desde URL")
+        else:
+            st.sidebar.error(error_message)
+            
+    elif data_source == "Subir archivo CSV":
+        uploaded_file = st.sidebar.file_uploader("Sube el archivo CSV:", type=['csv'])
+        if uploaded_file is not None:
+            df, error_message = load_data_from_file(uploaded_file)
+            if df is not None:
+                st.sidebar.success("Archivo cargado correctamente")
+            else:
+                st.sidebar.error(error_message)
+                
+    elif data_source == "Usar datos de ejemplo":
+        df = load_sample_data()
+        st.sidebar.success("Datos de ejemplo cargados")
     
     if df is not None:
         # Preprocesar datos
@@ -263,10 +279,7 @@ def main():
             """)
     else:
         st.warning("""
-        No se han podido cargar los datos automáticamente. Por favor:
-        1. Descarga manualmente el archivo desde la [URL de datos](https://ckan-data.montevideo.gub.uy/dataset/0a4cdc0a-ec35-4517-9e90-081659188ac0/resource/9eb3e81c-b916-4c6d-9f40-31dabebc708d/download/tabla_de_datos_de_material_ingresado_a_ecocentros.csv)
-        2. Sube el archivo descargado usando el cargador arriba
-        3. O usa los datos de ejemplo para probar la funcionalidad
+        Selecciona una opción para cargar los datos en el panel lateral.
         """)
 
 if __name__ == "__main__":
