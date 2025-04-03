@@ -140,22 +140,14 @@ def main():
     st.sidebar.title("Cargar Datos")
     data_source = st.sidebar.radio(
         "Selecciona la fuente de datos:",
-        ["Cargar desde URL", "Subir archivo CSV", "Usar datos de ejemplo"]
+        ["Subir archivo CSV", "Usar datos de ejemplo"]
     )
     
     df = None
     error_message = None
     
     # Cargar datos según la opción seleccionada
-    if data_source == "Cargar desde URL":
-        with st.sidebar.spinner('Cargando datos desde URL...'):
-            df, error_message = load_data_from_url()
-        if df is not None:
-            st.sidebar.success("Datos cargados correctamente desde URL")
-        else:
-            st.sidebar.error(error_message)
-            
-    elif data_source == "Subir archivo CSV":
+    if data_source == "Subir archivo CSV":
         uploaded_file = st.sidebar.file_uploader("Sube el archivo CSV:", type=['csv'])
         if uploaded_file is not None:
             df, error_message = load_data_from_file(uploaded_file)
@@ -280,6 +272,10 @@ def main():
     else:
         st.warning("""
         Selecciona una opción para cargar los datos en el panel lateral.
+        
+        **Importante**: Debido a restricciones de acceso (Error 403) no es posible conectar directamente a la URL. Por favor, descarga manualmente el archivo desde la siguiente dirección y luego súbelo:
+        
+        [Descargar datos de ecocentros](https://ckan-data.montevideo.gub.uy/dataset/0a4cdc0a-ec35-4517-9e90-081659188ac0/resource/9eb3e81c-b916-4c6d-9f40-31dabebc708d/download/tabla_de_datos_de_material_ingresado_a_ecocentros.csv)
         """)
 
 if __name__ == "__main__":
