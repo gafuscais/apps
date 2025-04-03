@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 from datetime import datetime
+import requests
+from io import StringIO
 
 # Configuración de página
 st.set_page_config(
@@ -10,12 +11,25 @@ st.set_page_config(
     layout="wide"
 )
 
-# Función para cargar los datos
-@st.cache_data
-def load_data():
+# URL de los datos
+DATA_URL = "https://ckan-data.montevideo.gub.uy/dataset/0a4cdc0a-ec35-4517-9e90-081659188ac0/resource/9eb3e81c-b916-4c6d-9f40-31dabebc708d/download/tabla_de_datos_de_material_ingresado_a_ecocentros.csv"
+
+# Función para cargar los datos desde la URL
+@st.cache_data(ttl=3600)  # Cache por 1 hora
+def load_data_from_url(url):
     try:
-        df = pd.read_csv('tabla_de_datos_de_material_ingresado_a_ecocentros.csv')
-        return df
+        # Mostrar mensaje mientras se cargan los datos
+        with st.spinner('Descargando datos desde la URL...'):
+            # Descargar datos desde la URL
+            response = requests.get(url)
+            response.raise_for_status()  # Verificar si la descarga fue exitosa
+            
+            # Convertir el contenido a un DataFrame
+            content = StringIO(response.text)
+            df = pd.read_csv(content)
+            
+            st.success('Datos cargados correctamente')
+            return df
     except Exception as e:
         st.error(f"Error al cargar los datos: {e}")
         return None
@@ -90,8 +104,11 @@ def main():
     st.title("Dashboard de Ecocentros - Montevideo")
     st.markdown("Visualización de datos de residuos recolectados en los ecocentros de Montevideo")
     
-    # Cargar datos
-    df = load_data()
+    # Información sobre la fuente de datos
+    st.markdown(f"**Fuente de datos:** [Catálogo de Datos Abiertos de Montevideo]({DATA_URL})")
+    
+    # Cargar datos desde la URL
+    df = load_data_from_url(DATA_URL)
     
     if df is not None:
         # Preprocesar datos
@@ -190,32 +207,36 @@ def main():
         
         # Información sobre los datos
         with st.expander("Acerca de los datos"):
-            st.write("""
+            st.write(f"""
+            ### Información del dataset
+            
             Estos datos muestran la cantidad de residuos (en kilogramos) recolectados en los ecocentros de Montevideo.
             
-            - **Ecocentros disponibles**: {}
-            - **Tipos de residuos**: {}
-            - **Rango de fechas**: {} a {}
-            - **Total de registros**: {}
-            """.format(
-                ", ".join(df['ecocentro'].unique()),
-                len(df['residuo'].unique()),
-                df['fecha'].min().strftime('%Y-%m'),
-                df['fecha'].max().strftime('%Y-%m'),
-                len(df)
-            ))
+            **Características del dataset:**
+            - **Ecocentros disponibles**: {", ".join(df['ecocentro'].unique())}
+            - **Tipos de residuos**: {len(df['residuo'].unique())}
+            - **Rango de fechas**: {df['fecha'].min().strftime('%Y-%m')} a {df['fecha'].max().strftime('%Y-%m')}
+            - **Total de registros**: {len(df)}
+            
+            **Fuente original:**
+            Los datos se obtienen directamente del [Catálogo de Datos Abiertos de Montevideo]({DATA_URL}).
+            """)
     else:
-        st.error("No se pudieron cargar los datos. Por favor, verifica que el archivo CSV esté disponible.")
+        st.error("No se pudieron cargar los datos. Por favor, verifica la conexión a Internet o si la URL del dataset sigue siendo válida.")
+        
+        # Mostrar URL fallida
+        st.code(DATA_URL)
         
         # Información de instalación
         st.markdown("### Solución de problemas")
         st.markdown("""
-        Si estás experimentando problemas al cargar los datos, asegúrate de:
+        Si estás experimentando problemas al cargar los datos desde la URL, asegúrate de:
         
-        1. Tener el archivo `tabla_de_datos_de_material_ingresado_a_ecocentros.csv` en el mismo directorio que este script.
-        2. Tener instaladas todas las dependencias necesarias:
+        1. Tener conexión a Internet estable.
+        2. Que la URL del dataset sea accesible (es posible que haya cambiado).
+        3. Tener instaladas todas las dependencias necesarias:
         ```
-        pip install streamlit pandas
+        pip install streamlit pandas requests
         ```
         
         Para ejecutar la aplicación correctamente:
