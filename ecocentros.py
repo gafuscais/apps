@@ -2,9 +2,6 @@ import streamlit as st
 import pandas as pd
 import requests
 from io import StringIO
-import altair as alt
-import numpy as np
-import matplotlib.pyplot as plt
 
 # Configuración de página
 st.set_page_config(
@@ -109,38 +106,6 @@ def create_kpis(df):
     
     return total_recolectado, promedio_mensual, residuo_mas_recolectado, ecocentro_mas_activo
 
-# Crear gráfico de torta utilizando matplotlib (incorporado en Streamlit)
-def create_pie_chart(df):
-    # Agrupar por ecocentro
-    ecocentro_df = df.groupby('ecocentro')['kg'].sum().reset_index()
-    ecocentro_df = ecocentro_df.sort_values('kg', ascending=False)
-    
-    # Calcular porcentajes
-    total_kg = ecocentro_df['kg'].sum()
-    ecocentro_df['porcentaje'] = (ecocentro_df['kg'] / total_kg * 100).round(1)
-    
-    # Crear figura con matplotlib
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # Crear gráfico de torta
-    wedges, texts, autotexts = ax.pie(
-        ecocentro_df['kg'], 
-        labels=ecocentro_df['ecocentro'],
-        autopct='%1.1f%%',
-        startangle=90,
-        explode=[0.05 if i == 0 else 0 for i in range(len(ecocentro_df))]  # Destacar el mayor
-    )
-    
-    # Personalizar estilo
-    ax.axis('equal')  # Para que el círculo se vea como un círculo
-    ax.set_title('Distribución por Ecocentro')
-    
-    # Personalizar texto
-    plt.setp(autotexts, size=10, weight="bold")
-    plt.setp(texts, size=10)
-    
-    return fig, ecocentro_df
-
 # Función principal
 def main():
     # Título y descripción
@@ -199,57 +164,63 @@ def main():
         else:
             st.info("No hay datos disponibles para el gráfico de evolución temporal.")
         
-        # Segundo gráfico: Comparación Anual (ordenado por año cronológicamente)
+        # Segundo gráfico: Comparación Anual
         st.markdown("### Comparación Anual")
         if not filtered_df.empty:
             anual_df = filtered_df.groupby('anio')['kg'].sum().reset_index()
             # Ordenar por año (cronológicamente)
             anual_df = anual_df.sort_values('anio')
-            # Asegurarse de que 'anio' sea string para mejor visualización
-            anual_df['anio'] = anual_df['anio'].astype(str)
-            # Crear gráfico ordenado cronológicamente
-            anual_chart = alt.Chart(anual_df).mark_bar().encode(
-                x=alt.X('anio:N', sort=None),  # No ordenar para mantener el orden original (cronológico)
-                y='kg:Q',
-                color=alt.Color('anio:N', legend=None),
-                tooltip=['anio', 'kg']
-            ).properties(height=400)
-            st.altair_chart(anual_chart, use_container_width=True)
+            # Gráfico de barras nativo de Streamlit
+            st.bar_chart(anual_df.set_index('anio'))
         else:
             st.info("No hay datos disponibles para el gráfico de comparación anual.")
         
-        # Tercer gráfico: Top 10 Residuos (barras horizontales)
+        # Tercer gráfico: Top 10 Residuos 
         st.markdown("### Top 10 Tipos de Residuos")
         if not filtered_df.empty:
             # Preparar datos para Top 10 de residuos
             residuo_df = filtered_df.groupby('residuo')['kg'].sum().reset_index()
             residuo_df = residuo_df.sort_values('kg', ascending=False).head(10)
-            
-            # Crear gráfico de barras horizontales
-            residuo_chart = alt.Chart(residuo_df).mark_bar().encode(
-                y=alt.Y('residuo:N', sort='-x'),  # Ordenar por valor x (kg) descendente
-                x='kg:Q',
-                color=alt.Color('residuo:N', legend=None),
-                tooltip=['residuo', 'kg']
-            ).properties(height=400)
-            st.altair_chart(residuo_chart, use_container_width=True)
+            # Gráfico de barras nativo de Streamlit
+            st.bar_chart(residuo_df.set_index('residuo'))
         else:
             st.info("No hay datos disponibles para el gráfico de tipos de residuos.")
         
-        # Cuarto gráfico: Comparación entre Ecocentros (gráfico de torta)
+        # Cuarto gráfico: Comparación entre Ecocentros
         st.markdown("### Comparación entre Ecocentros")
         if not filtered_df.empty:
-            # Crear gráfico de torta con matplotlib
-            pie_fig, ecocentro_df = create_pie_chart(filtered_df)
+            # Preparar datos para el gráfico
+            ecocentro_df = filtered_df.groupby('ecocentro')['kg'].sum().reset_index()
             
-            # Mostrar gráfico
-            st.pyplot(pie_fig)
+            # Calcular porcentajes
+            total_kg = ecocentro_df['kg'].sum()
+            ecocentro_df['porcentaje'] = (ecocentro_df['kg'] / total_kg * 100).round(1)
+            
+            # Ordenar de mayor a menor
+            ecocentro_df = ecocentro_df.sort_values('kg', ascending=False)
+            
+            # Crear representación visual simple
+            # Dividir en columnas
+            cols = st.columns(len(ecocentro_df))
+            
+            # Para cada ecocentro, mostrar un contenedor colorido
+            for i, (_, row) in enumerate(ecocentro_df.iterrows()):
+                with cols[i]:
+                    container = st.container()
+                    container.markdown(f"<div style='background-color:rgba(0,100,200,{row['porcentaje']/100}); padding:10px; border-radius:5px; height:200px; text-align:center;'>", unsafe_allow_html=True)
+                    container.markdown(f"<h3 style='color:white;'>{row['ecocentro']}</h3>", unsafe_allow_html=True)
+                    container.markdown(f"<h4 style='color:white;'>{row['kg']:,.0f} kg</h4>", unsafe_allow_html=True)
+                    container.markdown(f"<h4 style='color:white;'>{row['porcentaje']}%</h4>", unsafe_allow_html=True)
+                    container.markdown("</div>", unsafe_allow_html=True)
             
             # Tabla con información detallada
             st.markdown("#### Detalle por Ecocentro")
             detail_table = ecocentro_df[['ecocentro', 'kg', 'porcentaje']]
             detail_table.columns = ['Ecocentro', 'Kilogramos', 'Porcentaje (%)']
             st.dataframe(detail_table, use_container_width=True)
+            
+            # Mostrar también un gráfico de barras nativo
+            st.bar_chart(ecocentro_df.set_index('ecocentro')['kg'])
             
         else:
             st.info("No hay datos disponibles para el gráfico de comparación de ecocentros.")
