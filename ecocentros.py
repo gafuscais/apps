@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 # Aquí debes reemplazar con la ID de tu archivo en Google Drive
-GDRIVE_FILE_ID = "13qduxVDFRice-FYfqeSOSKJRBkmeO2RU"  # Reemplaza esto con tu ID de archivo
+GDRIVE_FILE_ID = "13qduxVDFRice-FYfqeSOSKJRBkmeO2RU" # Reemplaza esto con tu ID de archivo
 GDRIVE_URL = f"https://drive.google.com/uc?export=download&id={GDRIVE_FILE_ID}"
 
 # Mapeo de meses
@@ -170,6 +170,8 @@ def main():
             anual_df = filtered_df.groupby('anio')['kg'].sum().reset_index()
             # Ordenar por año (cronológicamente)
             anual_df = anual_df.sort_values('anio')
+            # Convertir 'anio' a string para usarlo como índice
+            anual_df['anio'] = anual_df['anio'].astype(str)
             # Gráfico de barras nativo de Streamlit
             st.bar_chart(anual_df.set_index('anio'))
         else:
@@ -186,7 +188,7 @@ def main():
         else:
             st.info("No hay datos disponibles para el gráfico de tipos de residuos.")
         
-        # Cuarto gráfico: Comparación entre Ecocentros
+        # Cuarto gráfico: Comparación entre Ecocentros simplificado
         st.markdown("### Comparación entre Ecocentros")
         if not filtered_df.empty:
             # Preparar datos para el gráfico
@@ -199,38 +201,22 @@ def main():
             # Ordenar de mayor a menor
             ecocentro_df = ecocentro_df.sort_values('kg', ascending=False)
             
-            # Crear representación visual simple
-            # Dividir en columnas
-            cols = st.columns(len(ecocentro_df))
-            
-            # Para cada ecocentro, mostrar un contenedor colorido
-            for i, (_, row) in enumerate(ecocentro_df.iterrows()):
-                with cols[i]:
-                    container = st.container()
-                    container.markdown(f"<div style='background-color:rgba(0,100,200,{row['porcentaje']/100}); padding:10px; border-radius:5px; height:200px; text-align:center;'>", unsafe_allow_html=True)
-                    container.markdown(f"<h3 style='color:white;'>{row['ecocentro']}</h3>", unsafe_allow_html=True)
-                    container.markdown(f"<h4 style='color:white;'>{row['kg']:,.0f} kg</h4>", unsafe_allow_html=True)
-                    container.markdown(f"<h4 style='color:white;'>{row['porcentaje']}%</h4>", unsafe_allow_html=True)
-                    container.markdown("</div>", unsafe_allow_html=True)
+            # Mostrar un gráfico de barras nativo
+            st.bar_chart(ecocentro_df.set_index('ecocentro')['kg'])
             
             # Tabla con información detallada
-            st.markdown("#### Detalle por Ecocentro")
+            st.markdown("#### Detalle por Ecocentro (con porcentajes)")
             detail_table = ecocentro_df[['ecocentro', 'kg', 'porcentaje']]
             detail_table.columns = ['Ecocentro', 'Kilogramos', 'Porcentaje (%)']
             st.dataframe(detail_table, use_container_width=True)
-            
-            # Mostrar también un gráfico de barras nativo
-            st.bar_chart(ecocentro_df.set_index('ecocentro')['kg'])
-            
         else:
             st.info("No hay datos disponibles para el gráfico de comparación de ecocentros.")
         
         # Datos detallados
         st.markdown("### Datos Detallados")
         if not filtered_df.empty:
-            # Mostrar los datos ordenados por año y mes (más reciente primero)
+            # Mostrar los datos sin ordenar
             display_df = filtered_df[['ecocentro', 'anio', 'mes_nombre', 'residuo', 'kg']]
-            # No ordenamos para evitar errores
             st.dataframe(display_df, use_container_width=True)
             st.write(f"Mostrando {len(display_df)} de {len(filtered_df)} registros")
         else:
