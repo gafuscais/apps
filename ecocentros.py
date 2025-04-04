@@ -10,8 +10,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# URL de los datos
-DATA_URL = "https://ckan-data.montevideo.gub.uy/dataset/0a4cdc0a-ec35-4517-9e90-081659188ac0/resource/9eb3e81c-b916-4c6d-9f40-31dabebc708d/download/tabla_de_datos_de_material_ingresado_a_ecocentros.csv"
+# Aquí debes reemplazar con la ID de tu archivo en Google Drive
+GDRIVE_FILE_ID = "13qduxVDFRice-FYfqeSOSKJRBkmeO2RU"  # Reemplaza esto con tu ID de archivo
+GDRIVE_URL = f"https://drive.google.com/uc?export=download&id={GDRIVE_FILE_ID}"
 
 # Función para cargar datos de ejemplo
 def load_sample_data():
@@ -41,25 +42,29 @@ MESES = {
     12: 'Diciembre'
 }
 
-# Función para cargar datos desde URL (sin widgets)
+# Función para cargar datos desde Google Drive
 @st.cache_data(ttl=3600)  # Cache por 1 hora
-def load_data_from_url():
+def load_data_from_gdrive():
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        response = requests.get(DATA_URL, headers=headers, timeout=10)
+        response = requests.get(GDRIVE_URL)
         
         if response.status_code == 200:
-            # Decodificar con UTF-8
             content = StringIO(response.content.decode('utf-8'))
             df = pd.read_csv(content)
             return df, None
         else:
-            return None, f"No se pudo acceder a la URL (Código {response.status_code})"
+            return None, f"No se pudo acceder al archivo en Google Drive (Código {response.status_code})"
                 
+    except UnicodeDecodeError:
+        try:
+            # Intentar con codificación latina
+            content = StringIO(response.content.decode('latin1'))
+            df = pd.read_csv(content)
+            return df, None
+        except Exception as e:
+            return None, f"Error de codificación: {e}"
     except Exception as e:
-        return None, f"Error al cargar datos desde URL: {e}"
+        return None, f"Error al cargar datos desde Google Drive: {e}"
 
 # Función para cargar datos desde archivo subido (sin cache)
 def load_data_from_file(uploaded_file):
@@ -133,21 +138,32 @@ def main():
     st.title("Dashboard de Ecocentros - Montevideo")
     st.markdown("Visualización de datos de residuos recolectados en los ecocentros de Montevideo")
     
-    # Información sobre la fuente de datos
-    st.markdown(f"**Fuente de datos:** [Catálogo de Datos Abiertos de Montevideo]({DATA_URL})")
-    
-    # Opciones para cargar datos (widgets fuera de la función cacheada)
+    # Opciones para cargar datos
     st.sidebar.title("Cargar Datos")
+    
+    # Solo mostrar opción de Google Drive si se ha configurado el ID
+    data_options = ["Subir archivo CSV", "Usar datos de ejemplo"]
+    if GDRIVE_FILE_ID != "TU_ID_DE_ARCHIVO":
+        data_options.insert(0, "Cargar desde Google Drive")
+    
     data_source = st.sidebar.radio(
         "Selecciona la fuente de datos:",
-        ["Subir archivo CSV", "Usar datos de ejemplo"]
+        data_options
     )
     
     df = None
     error_message = None
     
     # Cargar datos según la opción seleccionada
-    if data_source == "Subir archivo CSV":
+    if data_source == "Cargar desde Google Drive":
+        st.sidebar.info("Intentando cargar datos desde Google Drive...")
+        df, error_message = load_data_from_gdrive()
+        if df is not None:
+            st.sidebar.success("Datos cargados correctamente desde Google Drive")
+        else:
+            st.sidebar.error(error_message)
+    
+    elif data_source == "Subir archivo CSV":
         uploaded_file = st.sidebar.file_uploader("Sube el archivo CSV:", type=['csv'])
         if uploaded_file is not None:
             df, error_message = load_data_from_file(uploaded_file)
@@ -270,13 +286,21 @@ def main():
             - **Total de registros**: {len(df)}
             """)
     else:
-        st.warning("""
-        Selecciona una opción para cargar los datos en el panel lateral.
-        
-        **Importante**: Debido a restricciones de acceso (Error 403) no es posible conectar directamente a la URL. Por favor, descarga manualmente el archivo desde la siguiente dirección y luego súbelo:
-        
-        [Descargar datos de ecocentros](https://ckan-data.montevideo.gub.uy/dataset/0a4cdc0a-ec35-4517-9e90-081659188ac0/resource/9eb3e81c-b916-4c6d-9f40-31dabebc708d/download/tabla_de_datos_de_material_ingresado_a_ecocentros.csv)
-        """)
+        if GDRIVE_FILE_ID == "TU_ID_DE_ARCHIVO":
+            st.warning("""
+            **Instrucciones de configuración:**
+            
+            1. Sube el archivo CSV a Google Drive
+            2. Compártelo con "Cualquier persona con el enlace puede ver"
+            3. Obtén el ID del archivo del enlace de Google Drive
+            4. Reemplaza "TU_ID_DE_ARCHIVO" en el código (línea 14) con el ID obtenido
+            
+            Mientras tanto, puedes utilizar las opciones de carga manual o datos de ejemplo.
+            """)
+        else:
+            st.warning("""
+            Selecciona una opción para cargar los datos en el panel lateral.
+            """)
 
 if __name__ == "__main__":
     main()
