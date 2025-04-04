@@ -3,6 +3,8 @@ import pandas as pd
 import requests
 from io import StringIO
 import altair as alt
+import plotly.express as px
+import plotly.graph_objects as go
 
 # Configuración de página
 st.set_page_config(
@@ -165,15 +167,17 @@ def main():
         else:
             st.info("No hay datos disponibles para el gráfico de evolución temporal.")
         
-        # Segundo gráfico: Comparación Anual
+        # Segundo gráfico: Comparación Anual (ordenado por año cronológicamente)
         st.markdown("### Comparación Anual")
         if not filtered_df.empty:
             anual_df = filtered_df.groupby('anio')['kg'].sum().reset_index()
+            # Ordenar por año (cronológicamente)
+            anual_df = anual_df.sort_values('anio')
             # Asegurarse de que 'anio' sea string para mejor visualización
             anual_df['anio'] = anual_df['anio'].astype(str)
-            # Crear gráfico ordenado de mayor a menor
+            # Crear gráfico ordenado cronológicamente
             anual_chart = alt.Chart(anual_df).mark_bar().encode(
-                x=alt.X('anio:N', sort='-y'),  # Ordenar por valor de y (kg) descendente
+                x=alt.X('anio:N', sort=None),  # No ordenar para mantener el orden original (cronológico)
                 y='kg:Q',
                 color=alt.Color('anio:N', legend=None),
                 tooltip=['anio', 'kg']
@@ -200,18 +204,56 @@ def main():
         else:
             st.info("No hay datos disponibles para el gráfico de tipos de residuos.")
         
-        # Cuarto gráfico: Comparación entre Ecocentros
+        # Cuarto gráfico: Comparación entre Ecocentros (gráfico de torta)
         st.markdown("### Comparación entre Ecocentros")
         if not filtered_df.empty:
+            # Preparar datos para el gráfico de torta
             ecocentro_df = filtered_df.groupby('ecocentro')['kg'].sum().reset_index()
-            # Crear gráfico ordenado de mayor a menor
-            ecocentro_chart = alt.Chart(ecocentro_df).mark_bar().encode(
-                x=alt.X('ecocentro:N', sort='-y'),  # Ordenar por valor de y (kg) descendente
-                y='kg:Q',
-                color=alt.Color('ecocentro:N', legend=None),
-                tooltip=['ecocentro', 'kg']
-            ).properties(height=400)
-            st.altair_chart(ecocentro_chart, use_container_width=True)
+            ecocentro_df = ecocentro_df.sort_values('kg', ascending=False)
+            
+            # Calcular porcentajes
+            total_kg = ecocentro_df['kg'].sum()
+            ecocentro_df['porcentaje'] = (ecocentro_df['kg'] / total_kg * 100).round(1)
+            
+            # Crear etiquetas personalizadas con valor bruto y porcentaje
+            ecocentro_df['etiqueta'] = ecocentro_df.apply(
+                lambda x: f"{x['ecocentro']}: {x['kg']:,.0f} kg ({x['porcentaje']}%)", axis=1
+            )
+            
+            # Crear gráfico de torta con Plotly
+            fig = px.pie(
+                ecocentro_df, 
+                values='kg', 
+                names='ecocentro',
+                title="",
+                hover_data=['kg', 'porcentaje'],
+                labels={'kg': 'Kilogramos', 'porcentaje': 'Porcentaje'}
+            )
+            
+            # Personalizar el gráfico
+            fig.update_traces(
+                textposition='inside',
+                textinfo='percent+label',
+                marker=dict(line=dict(color='#FFFFFF', width=2)),
+                pull=[0.05 if x == ecocentro_df['kg'].max() else 0 for x in ecocentro_df['kg']]  # Destacar el mayor
+            )
+            
+            fig.update_layout(
+                height=500,
+                uniformtext_minsize=12,
+                uniformtext_mode='hide',
+                legend_title="Ecocentros"
+            )
+            
+            # Mostrar gráfico
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Tabla con información detallada
+            st.markdown("#### Detalle por Ecocentro")
+            detail_table = ecocentro_df[['ecocentro', 'kg', 'porcentaje']]
+            detail_table.columns = ['Ecocentro', 'Kilogramos', 'Porcentaje (%)']
+            st.dataframe(detail_table, use_container_width=True)
+            
         else:
             st.info("No hay datos disponibles para el gráfico de comparación de ecocentros.")
         
