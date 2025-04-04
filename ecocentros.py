@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 from io import StringIO
+import altair as alt
 
 # Configuración de página
 st.set_page_config(
@@ -155,53 +156,64 @@ def main():
         with col4:
             st.metric("Ecocentro Más Activo", ecocentro_max)
         
-        # Primera fila de gráficos
-        st.markdown("### Tipos de Residuos y Ecocentros")
-        col1, col2 = st.columns(2)
+        # Primer gráfico: Evolución Mensual
+        st.markdown("### Evolución Mensual de Residuos")
+        if not filtered_df.empty:
+            time_df = filtered_df.groupby(['fecha'])['kg'].sum().reset_index()
+            time_df = time_df.sort_values('fecha')  # Ordenar cronológicamente
+            st.line_chart(time_df.set_index('fecha'))
+        else:
+            st.info("No hay datos disponibles para el gráfico de evolución temporal.")
         
-        with col1:
-            st.subheader("Top 10 Tipos de Residuos")
-            # Crear datos para gráfico de distribución de residuos (ordenado de mayor a menor)
-            if not filtered_df.empty:
-                residuo_df = filtered_df.groupby('residuo')['kg'].sum().reset_index()
-                residuo_df = residuo_df.sort_values('kg', ascending=False).head(10)
-                st.bar_chart(residuo_df.set_index('residuo'))
-            else:
-                st.info("No hay datos disponibles para el gráfico de tipos de residuos.")
+        # Segundo gráfico: Comparación Anual
+        st.markdown("### Comparación Anual")
+        if not filtered_df.empty:
+            anual_df = filtered_df.groupby('anio')['kg'].sum().reset_index()
+            # Asegurarse de que 'anio' sea string para mejor visualización
+            anual_df['anio'] = anual_df['anio'].astype(str)
+            # Crear gráfico ordenado de mayor a menor
+            anual_chart = alt.Chart(anual_df).mark_bar().encode(
+                x=alt.X('anio:N', sort='-y'),  # Ordenar por valor de y (kg) descendente
+                y='kg:Q',
+                color=alt.Color('anio:N', legend=None),
+                tooltip=['anio', 'kg']
+            ).properties(height=400)
+            st.altair_chart(anual_chart, use_container_width=True)
+        else:
+            st.info("No hay datos disponibles para el gráfico de comparación anual.")
         
-        with col2:
-            st.subheader("Comparación entre Ecocentros")
-            # Crear datos para gráfico de comparación de ecocentros (ordenado de mayor a menor)
-            if not filtered_df.empty:
-                ecocentro_df = filtered_df.groupby('ecocentro')['kg'].sum().reset_index()
-                ecocentro_df = ecocentro_df.sort_values('kg', ascending=False)
-                st.bar_chart(ecocentro_df.set_index('ecocentro'))
-            else:
-                st.info("No hay datos disponibles para el gráfico de comparación de ecocentros.")
+        # Tercer gráfico: Top 10 Residuos (barras horizontales)
+        st.markdown("### Top 10 Tipos de Residuos")
+        if not filtered_df.empty:
+            # Preparar datos para Top 10 de residuos
+            residuo_df = filtered_df.groupby('residuo')['kg'].sum().reset_index()
+            residuo_df = residuo_df.sort_values('kg', ascending=False).head(10)
+            
+            # Crear gráfico de barras horizontales
+            residuo_chart = alt.Chart(residuo_df).mark_bar().encode(
+                y=alt.Y('residuo:N', sort='-x'),  # Ordenar por valor x (kg) descendente
+                x='kg:Q',
+                color=alt.Color('residuo:N', legend=None),
+                tooltip=['residuo', 'kg']
+            ).properties(height=400)
+            st.altair_chart(residuo_chart, use_container_width=True)
+        else:
+            st.info("No hay datos disponibles para el gráfico de tipos de residuos.")
         
-        # Segunda fila de gráficos
-        st.markdown("### Evolución Temporal y Comparación Anual")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Evolución Mensual de Residuos")
-            # Crear datos para gráfico de evolución temporal
-            if not filtered_df.empty:
-                time_df = filtered_df.groupby(['fecha'])['kg'].sum().reset_index()
-                time_df = time_df.sort_values('fecha')
-                st.line_chart(time_df.set_index('fecha'))
-            else:
-                st.info("No hay datos disponibles para el gráfico de evolución temporal.")
-        
-        with col2:
-            st.subheader("Comparación Anual")
-            # Crear datos para gráfico de comparación anual (ordenado de mayor a menor)
-            if not filtered_df.empty:
-                anual_df = filtered_df.groupby('anio')['kg'].sum().reset_index()
-                anual_df = anual_df.sort_values('kg', ascending=False)
-                st.bar_chart(anual_df.set_index('anio'))
-            else:
-                st.info("No hay datos disponibles para el gráfico de comparación anual.")
+        # Cuarto gráfico: Comparación entre Ecocentros
+        st.markdown("### Comparación entre Ecocentros")
+        if not filtered_df.empty:
+            ecocentro_df = filtered_df.groupby('ecocentro')['kg'].sum().reset_index()
+            # Crear gráfico ordenado de mayor a menor
+            ecocentro_chart = alt.Chart(ecocentro_df).mark_bar().encode(
+                x=alt.X('ecocentro:N', sort='-y'),  # Ordenar por valor de y (kg) descendente
+                y='kg:Q',
+                color=alt.Color('ecocentro:N', legend=None),
+                tooltip=['ecocentro', 'kg']
+            ).properties(height=400)
+            st.altair_chart(ecocentro_chart, use_container_width=True)
+        else:
+            st.info("No hay datos disponibles para el gráfico de comparación de ecocentros.")
         
         # Datos detallados
         st.markdown("### Datos Detallados")
