@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 from io import StringIO
+import matplotlib.pyplot as plt
 
 # Configuración de página
 st.set_page_config(
@@ -200,7 +201,7 @@ def main():
         else:
             st.info("No hay datos disponibles para el gráfico de tipos de residuos.")
         
-        # Cuarto gráfico: Comparación entre Ecocentros (ordenado por cantidad)
+        # Cuarto gráfico: Comparación entre Ecocentros (gráfico circular)
         st.markdown("### Comparación entre Ecocentros")
         if not filtered_df.empty:
             # Preparar datos para el gráfico
@@ -213,18 +214,45 @@ def main():
             # Ordenar de mayor a menor
             ecocentro_df = ecocentro_df.sort_values('kg', ascending=False)
             
-            # Para asegurar que el gráfico de barras nativo muestre el orden correcto,
-            # necesitamos usar una Serie ordenada
-            ecocentro_serie = pd.Series(
-                index=ecocentro_df['ecocentro'].values,
-                data=ecocentro_df['kg'].values
+            # Crear gráfico circular con Matplotlib
+            fig, ax = plt.subplots(figsize=(10, 6))
+            
+            # Datos para el gráfico
+            labels = ecocentro_df['ecocentro']
+            sizes = ecocentro_df['kg']
+            
+            # Destacar el ecocentro con mayor cantidad
+            explode = [0.1 if i == 0 else 0 for i in range(len(ecocentro_df))]
+            
+            # Crear gráfico de torta
+            wedges, texts, autotexts = ax.pie(
+                sizes, 
+                explode=explode,
+                labels=labels, 
+                autopct='%1.1f%%',
+                shadow=False, 
+                startangle=90
             )
             
-            # Mostrar gráfico ordenado
-            st.bar_chart(ecocentro_serie)
+            # Ajustar propiedades del texto
+            for text in texts:
+                text.set_fontsize(10)
             
-            # Tabla con información detallada (ya ordenada)
-            st.markdown("#### Detalle por Ecocentro (con porcentajes)")
+            for autotext in autotexts:
+                autotext.set_fontsize(10)
+                autotext.set_fontweight('bold')
+            
+            # Igual proporción de aspecto para asegurar que sea un círculo
+            ax.axis('equal')
+            
+            # Añadir título
+            plt.title('Distribución por Ecocentro (% del total de residuos)')
+            
+            # Mostrar el gráfico en Streamlit
+            st.pyplot(fig)
+            
+            # Tabla con información detallada
+            st.markdown("#### Detalle por Ecocentro (con valores exactos)")
             detail_table = ecocentro_df[['ecocentro', 'kg', 'porcentaje']]
             detail_table.columns = ['Ecocentro', 'Kilogramos', 'Porcentaje (%)']
             st.dataframe(detail_table, use_container_width=True)
