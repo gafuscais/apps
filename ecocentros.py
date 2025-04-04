@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 # Aquí debes reemplazar con la ID de tu archivo en Google Drive
-GDRIVE_FILE_ID = "13qduxVDFRice-FYfqeSOSKJRBkmeO2RU" # Reemplaza esto con tu ID de archivo
+GDRIVE_FILE_ID = "13qduxVDFRice-FYfqeSOSKJRBkmeO2RU"  # Reemplaza esto con tu ID de archivo
 GDRIVE_URL = f"https://drive.google.com/uc?export=download&id={GDRIVE_FILE_ID}"
 
 # Mapeo de meses
@@ -177,18 +177,30 @@ def main():
         else:
             st.info("No hay datos disponibles para el gráfico de comparación anual.")
         
-        # Tercer gráfico: Top 10 Residuos 
+        # Tercer gráfico: Top 10 Residuos (ordenados por cantidad)
         st.markdown("### Top 10 Tipos de Residuos")
         if not filtered_df.empty:
             # Preparar datos para Top 10 de residuos
             residuo_df = filtered_df.groupby('residuo')['kg'].sum().reset_index()
             residuo_df = residuo_df.sort_values('kg', ascending=False).head(10)
-            # Gráfico de barras nativo de Streamlit
-            st.bar_chart(residuo_df.set_index('residuo'))
+            
+            # Para asegurar que el gráfico de barras nativo muestre el orden correcto,
+            # necesitamos usar una Serie ordenada
+            residuo_serie = pd.Series(
+                index=residuo_df['residuo'].values,
+                data=residuo_df['kg'].values
+            )
+            
+            # Mostrar gráfico ordenado
+            st.bar_chart(residuo_serie)
+            
+            # También mostrar la tabla ordenada
+            st.markdown("#### Detalle de Top 10 Residuos")
+            st.dataframe(residuo_df, use_container_width=True)
         else:
             st.info("No hay datos disponibles para el gráfico de tipos de residuos.")
         
-        # Cuarto gráfico: Comparación entre Ecocentros simplificado
+        # Cuarto gráfico: Comparación entre Ecocentros (ordenado por cantidad)
         st.markdown("### Comparación entre Ecocentros")
         if not filtered_df.empty:
             # Preparar datos para el gráfico
@@ -201,10 +213,17 @@ def main():
             # Ordenar de mayor a menor
             ecocentro_df = ecocentro_df.sort_values('kg', ascending=False)
             
-            # Mostrar un gráfico de barras nativo
-            st.bar_chart(ecocentro_df.set_index('ecocentro')['kg'])
+            # Para asegurar que el gráfico de barras nativo muestre el orden correcto,
+            # necesitamos usar una Serie ordenada
+            ecocentro_serie = pd.Series(
+                index=ecocentro_df['ecocentro'].values,
+                data=ecocentro_df['kg'].values
+            )
             
-            # Tabla con información detallada
+            # Mostrar gráfico ordenado
+            st.bar_chart(ecocentro_serie)
+            
+            # Tabla con información detallada (ya ordenada)
             st.markdown("#### Detalle por Ecocentro (con porcentajes)")
             detail_table = ecocentro_df[['ecocentro', 'kg', 'porcentaje']]
             detail_table.columns = ['Ecocentro', 'Kilogramos', 'Porcentaje (%)']
