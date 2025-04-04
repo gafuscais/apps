@@ -3,8 +3,8 @@ import pandas as pd
 import requests
 from io import StringIO
 import altair as alt
-import plotly.express as px
-import plotly.graph_objects as go
+import numpy as np
+import matplotlib.pyplot as plt
 
 # Configuración de página
 st.set_page_config(
@@ -109,6 +109,38 @@ def create_kpis(df):
     
     return total_recolectado, promedio_mensual, residuo_mas_recolectado, ecocentro_mas_activo
 
+# Crear gráfico de torta utilizando matplotlib (incorporado en Streamlit)
+def create_pie_chart(df):
+    # Agrupar por ecocentro
+    ecocentro_df = df.groupby('ecocentro')['kg'].sum().reset_index()
+    ecocentro_df = ecocentro_df.sort_values('kg', ascending=False)
+    
+    # Calcular porcentajes
+    total_kg = ecocentro_df['kg'].sum()
+    ecocentro_df['porcentaje'] = (ecocentro_df['kg'] / total_kg * 100).round(1)
+    
+    # Crear figura con matplotlib
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Crear gráfico de torta
+    wedges, texts, autotexts = ax.pie(
+        ecocentro_df['kg'], 
+        labels=ecocentro_df['ecocentro'],
+        autopct='%1.1f%%',
+        startangle=90,
+        explode=[0.05 if i == 0 else 0 for i in range(len(ecocentro_df))]  # Destacar el mayor
+    )
+    
+    # Personalizar estilo
+    ax.axis('equal')  # Para que el círculo se vea como un círculo
+    ax.set_title('Distribución por Ecocentro')
+    
+    # Personalizar texto
+    plt.setp(autotexts, size=10, weight="bold")
+    plt.setp(texts, size=10)
+    
+    return fig, ecocentro_df
+
 # Función principal
 def main():
     # Título y descripción
@@ -207,46 +239,11 @@ def main():
         # Cuarto gráfico: Comparación entre Ecocentros (gráfico de torta)
         st.markdown("### Comparación entre Ecocentros")
         if not filtered_df.empty:
-            # Preparar datos para el gráfico de torta
-            ecocentro_df = filtered_df.groupby('ecocentro')['kg'].sum().reset_index()
-            ecocentro_df = ecocentro_df.sort_values('kg', ascending=False)
-            
-            # Calcular porcentajes
-            total_kg = ecocentro_df['kg'].sum()
-            ecocentro_df['porcentaje'] = (ecocentro_df['kg'] / total_kg * 100).round(1)
-            
-            # Crear etiquetas personalizadas con valor bruto y porcentaje
-            ecocentro_df['etiqueta'] = ecocentro_df.apply(
-                lambda x: f"{x['ecocentro']}: {x['kg']:,.0f} kg ({x['porcentaje']}%)", axis=1
-            )
-            
-            # Crear gráfico de torta con Plotly
-            fig = px.pie(
-                ecocentro_df, 
-                values='kg', 
-                names='ecocentro',
-                title="",
-                hover_data=['kg', 'porcentaje'],
-                labels={'kg': 'Kilogramos', 'porcentaje': 'Porcentaje'}
-            )
-            
-            # Personalizar el gráfico
-            fig.update_traces(
-                textposition='inside',
-                textinfo='percent+label',
-                marker=dict(line=dict(color='#FFFFFF', width=2)),
-                pull=[0.05 if x == ecocentro_df['kg'].max() else 0 for x in ecocentro_df['kg']]  # Destacar el mayor
-            )
-            
-            fig.update_layout(
-                height=500,
-                uniformtext_minsize=12,
-                uniformtext_mode='hide',
-                legend_title="Ecocentros"
-            )
+            # Crear gráfico de torta con matplotlib
+            pie_fig, ecocentro_df = create_pie_chart(filtered_df)
             
             # Mostrar gráfico
-            st.plotly_chart(fig, use_container_width=True)
+            st.pyplot(pie_fig)
             
             # Tabla con información detallada
             st.markdown("#### Detalle por Ecocentro")
